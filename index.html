@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calorie Tracker</title>
+<meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141513" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Calories">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="datenav">
+      <button class="icon-btn" id="prevDay" aria-label="Previous day">‹</button>
+      <h1 id="dateLabel">Today</h1>
+      <button class="icon-btn" id="nextDay" aria-label="Next day">›</button>
+    </div>
+    <button class="icon-btn" id="openSettings" aria-label="Settings">⚙︎</button>
+  </header>
+
+  <div class="banner" id="keyBanner" hidden>Barcode scanning works now. To use meal photos and label reading, add your Claude API key in Settings →</div>
+  <div class="banner" id="installBanner" hidden>Tip: tap <b>Share → Add to Home Screen</b> so it opens like an app and your log is kept safely.</div>
+
+  <section class="card summary">
+    <div class="ring">
+      <svg width="132" height="132" viewBox="0 0 132 132" aria-hidden="true">
+        <circle cx="66" cy="66" r="60" fill="none" stroke="var(--line)" stroke-width="12"/>
+        <circle id="ringArc" cx="66" cy="66" r="60" fill="none" stroke="var(--accent)" stroke-width="12" stroke-linecap="round"/>
+      </svg>
+      <div class="mid"><div><div class="big" id="remain">–</div><div class="sm" id="remainLbl">kcal left</div></div></div>
+    </div>
+    <div class="macros">
+      <b id="eaten" class="eaten">0 / 2,000 kcal</b>
+      <div class="mrow"><div class="top"><span>Protein</span><span id="pTxt"></span></div><div class="bar"><i id="pBar" style="background:var(--protein)"></i></div></div>
+      <div class="mrow"><div class="top"><span>Carbs</span><span id="cTxt"></span></div><div class="bar"><i id="cBar" style="background:var(--carbs)"></i></div></div>
+      <div class="mrow"><div class="top"><span>Fat</span><span id="fTxt"></span></div><div class="bar"><i id="fBar" style="background:var(--fat)"></i></div></div>
+    </div>
+  </section>
+
+  <div class="actions">
+    <button class="act" id="actScan">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>
+      Scan barcode</button>
+    <button class="act" id="actMeal">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      Snap meal</button>
+    <button class="act" id="actManual">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      Add manually</button>
+  </div>
+
+  <section class="card">
+    <div class="sec-title"><span>Log</span><span id="countLbl"></span></div>
+    <div id="log"></div>
+  </section>
+
+  <section class="card" id="quickCard" hidden>
+    <div class="sec-title"><span>Quick add</span></div>
+    <div id="quick" class="pills"></div>
+  </section>
+
+  <section class="card">
+    <div class="sec-title"><span>Last 7 days</span></div>
+    <div id="week" class="week"></div>
+  </section>
+</div>
+
+<!-- Live barcode scanner -->
+<div class="scanner" id="scanner" hidden>
+  <video id="video" playsinline muted autoplay></video>
+  <div class="scan-top"><button class="link-white" id="scanCancel">Cancel</button></div>
+  <div class="scan-center"><div class="frame"></div><p>Point at the barcode</p></div>
+  <div class="scan-bottom">
+    <div class="status" id="scanStatus"></div>
+    <label class="f">Or type the number under the barcode</label>
+    <div class="row">
+      <input type="text" inputmode="numeric" id="scanCode" placeholder="e.g. 012345678905">
+      <button class="btn small" id="scanGo">Look up</button>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+
+<script src="zxing-browser.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

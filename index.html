@@ -326,8 +326,7 @@ function markDirty(){ ui.dirty=true; var b=document.getElementById('savebar'); i
 /* ---------- saving ---------- */
 function buildDoc(s){
   var json = JSON.stringify(s).replace(/</g,'\\u003c');
-  return '<!DOCTYPE html>\n<html lang="en">\n<head>\n'+HEAD+'\n<style id="st">'+STYLE+'</style>\n</head>\n<body>\n<div id="root"></div>\n<div id="toast" role="status" aria-live="polite"></div>\n<script id="data" type="application/json">'+json+'<\/script>\n<script id="app">'+APP+'<\/script>\n<script>if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function(){});</script>
-</body>\n</html>';
+  return '<!DOCTYPE html>\n<html lang="en">\n<head>\n'+HEAD+'\n<style id="st">'+STYLE+'</style>\n</head>\n<body>\n<div id="root"></div>\n<div id="toast" role="status" aria-live="polite"></div>\n<script id="data" type="application/json">'+json+'<\/script>\n<script id="app">'+APP+'<\/script>\n</body>\n</html>';
 }
 function persist(msg){
   state.savedAt = Date.now();
@@ -932,5 +931,6 @@ render();
 try{ var fl=sessionStorage.getItem('wl-flash'); if(fl){ sessionStorage.removeItem('wl-flash'); setTimeout(function(){ toast(fl); },300); } }catch(e){}
 })();
 </script>
+<script>if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function(){});</script>
 </body>
 </html>

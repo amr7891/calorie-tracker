@@ -126,6 +126,9 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--mu
 .hint{display:inline-block;font-size:13px;color:var(--good);background:var(--good-soft);border-radius:8px;padding:3px 8px;font-weight:600;margin-top:6px}
 .target{font-weight:600;color:var(--ink)}
 .tag{display:none}
+.muslink{display:block;background:none;border:0;padding:0;margin-top:2px;font-size:13px;font-weight:500;color:var(--accent);text-align:left}
+.mname{background:none;border:0;padding:0;text-align:left;font-size:15px;display:flex;flex-direction:column;color:var(--ink)}
+.mname small{font-size:12px;color:var(--accent);font-weight:500}
 .icon{border:0;background:var(--fill);border-radius:50%;width:30px;height:30px;flex:none;font-size:15px;line-height:1;color:var(--muted);display:inline-flex;align-items:center;justify-content:center}
 .sets{display:flex;flex-direction:column;gap:8px}
 .srow{display:grid;grid-template-columns:30px 1fr 1fr 44px;gap:10px;align-items:center}
@@ -206,7 +209,7 @@ details.custom summary{cursor:pointer;color:var(--accent);font-weight:500;font-s
 <body>
 <div id="root"></div>
 <div id="toast" role="status" aria-live="polite"></div>
-<script id="data" type="application/json">{"v":2,"savedAt":0,"workouts":[],"cardio":[],"bw":[],"custom":[],"routines":null,"schedule":null,"goals":null,"settings":{"rest":90},"draft":null}</script>
+<script id="data" type="application/json">{"v":2,"savedAt":0,"workouts":[],"cardio":[],"bw":[],"custom":[],"routines":null,"schedule":null,"goals":null,"settings":{"rest":90,"helperCredit":0.5},"exMuscles":{},"draft":null}</script>
 <script id="app">
 (function(){
 'use strict';
@@ -236,6 +239,16 @@ var DEFAULT_TEMPLATES = {
   'Glutes & Hams':['Hip Thrust','Romanian Deadlift','Bulgarian Split Squat','Seated Leg Curl','Cable Kickback','Hip Abduction'],
   'Shoulders & Arms':['Seated DB Shoulder Press','Lateral Raise','Face Pull','Preacher Curl','Skull Crusher','Hammer Curl','Rope Pushdown']
 };
+// Helper muscles each library exercise also works (primary comes from LIB). Each counts as a partial set.
+var HELPERS = {
+  'Barbell Bench Press':['Triceps','Shoulders'],'Incline Barbell Press':['Shoulders','Triceps'],'Incline DB Press':['Shoulders','Triceps'],
+  'Flat DB Press':['Shoulders','Triceps'],'Machine Chest Press':['Shoulders','Triceps'],'Dips':['Triceps','Shoulders'],
+  'Deadlift':['Hamstrings','Glutes'],'Pull-Up':['Biceps'],'Lat Pulldown':['Biceps'],'Barbell Row':['Biceps'],'Seated Cable Row':['Biceps'],
+  'Chest-Supported Row':['Biceps'],'Single-Arm DB Row':['Biceps'],
+  'Overhead Press':['Triceps'],'Seated DB Shoulder Press':['Triceps'],'Rear Delt Fly':['Back'],'Face Pull':['Back'],
+  'Back Squat':['Glutes'],'Hack Squat':['Glutes'],'Leg Press':['Glutes'],'Bulgarian Split Squat':['Glutes'],'Walking Lunge':['Glutes'],
+  'Romanian Deadlift':['Glutes'],'Hip Thrust':['Hamstrings'],'Close-Grip Bench Press':['Chest']
+};
 var DEFAULT_MUSCLES = {Chest:{sets:6,reps:'6-10'},Back:{sets:8,reps:'6-10'},Shoulders:{sets:6,reps:'6-10'},Quads:{sets:6,reps:'6-10'},Hamstrings:{sets:4,reps:'6-10'},Glutes:{sets:4,reps:'6-10'},Biceps:{sets:4,reps:'6-10'},Triceps:{sets:4,reps:'6-10'},Calves:{sets:4,reps:'10-15'},Abs:{sets:4,reps:'10-15'}};
 var DEFAULT_SCHEDULE = ['Push','Pull','Legs',null,'Upper','Lower',null];
 var CARDIO_TYPES = ['Incline walk','StairMaster','Stationary bike','Elliptical','Treadmill run','Outdoor walk','Rower','Other'];
@@ -259,7 +272,7 @@ function defaultItem(name, idx){
 }
 function groupOf0(name){ for(var g in LIB){ if(LIB[g].indexOf(name)>=0) return g; } return 'Other'; }
 function routinesFrom(tpls){ return Object.keys(tpls).map(function(k){ return {id:uid(),name:k,items:tpls[k].map(function(x,i){ return typeof x==='string'?defaultItem(x,i):x; }),cardio:null}; }); }
-function blank(){ return {v:2,savedAt:0,workouts:[],cardio:[],bw:[],custom:[],routines:null,schedule:null,goals:null,settings:{rest:90},draft:null}; }
+function blank(){ return {v:2,savedAt:0,workouts:[],cardio:[],bw:[],custom:[],routines:null,schedule:null,goals:null,settings:{rest:90,helperCredit:0.5},exMuscles:{},draft:null}; }
 var LS = {
   get:function(k){ try{ var v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch(e){ return null; } },
   set:function(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(e){ return false; } },
@@ -277,7 +290,8 @@ function normalize(s){
   s.goals = Object.assign({workouts:5,cardioMin:oldGoal||150,bwTarget:'',lifts:[]}, s.goals||{});
   var mus = {}; GROUPS.forEach(function(g){ mus[g] = Object.assign({}, DEFAULT_MUSCLES[g], (s.goals.muscles||{})[g]||{}); });
   s.goals.muscles = mus; delete s.goals.setsMin; delete s.goals.setsMax;
-  s.settings = Object.assign({rest:90}, s.settings||{}); delete s.settings.cardioGoal;
+  s.settings = Object.assign({rest:90,helperCredit:0.5}, s.settings||{}); delete s.settings.cardioGoal;
+  if(!s.exMuscles || typeof s.exMuscles!=='object') s.exMuscles = {};
   s.v = 2;
   return s;
 }
@@ -322,11 +336,21 @@ function e1rm(w,r){ w=n(w); r=n(r); if(w<=0||r<=0) return 0; return r===1?w:w*(1
 function setStr(s){ return n(s.w)>0 ? fmtW(s.w)+'×'+n(s.r) : 'BW×'+n(s.r); }
 function repRange(r){ var m=String(r||'').match(/(\d+)\s*(?:-|–|to)\s*(\d+)/); if(m) return [+m[1],+m[2]]; var x=parseInt(r,10); return x?[x,x]:null; }
 function fmtReps(r){ return String(r||'').replace(/\s*-\s*/,'–'); }
-function groupOf(name){
-  var g = groupOf0(name); if(g!=='Other') return g;
-  var c = state.custom.filter(function(x){ return x.name===name; })[0];
-  return c ? c.group : 'Other';
+function musclesOf(name){
+  var o = state && state.exMuscles && state.exMuscles[name];
+  if(o && o.p) return {p:o.p, s:(o.s||[]).filter(function(x){ return x!==o.p; })};
+  var c = state && state.custom ? state.custom.filter(function(x){ return x.name===name; })[0] : null;
+  var pm = groupOf0(name); if(pm==='Other' && c) pm = c.group;
+  return {p:pm, s:((c && c.sec) || HELPERS[name] || []).filter(function(x){ return x!==pm; })};
 }
+function groupOf(name){ return musclesOf(name).p; }
+function credit(){ var c=state.settings.helperCredit; return c==null ? 0.5 : n(c); }
+function addCredit(map, name, sets){
+  var m=musclesOf(name), c=credit(); map[m.p]=(map[m.p]||0)+sets;
+  if(c) m.s.forEach(function(x){ map[x]=(map[x]||0)+sets*c; });
+}
+function fmtSets(x){ var r=Math.round(x*10)/10; return r%1 ? r.toFixed(1) : String(r); }
+function musLine(name){ var m=musclesOf(name); return m.p+(m.s.length?' + '+m.s.join(', ').toLowerCase():''); }
 function allNames(g){
   var list = g ? (LIB[g]||[]).slice() : [].concat.apply([], GROUPS.map(function(k){ return LIB[k]; }));
   state.custom.forEach(function(c){ if(!g || c.group===g) list.push(c.name); });
@@ -400,7 +424,7 @@ function render(){
   root.innerHTML =
     (inWorkout ? '' : '<header class="top"><p class="date">'+esc(fmtLong(today()))+'</p><h1>'+TABS[ui.tab]+'</h1></header>')+
     bannerHTML()+'<main>'+v+'</main>'+
-    '<div class="savebar" id="savebar"'+(ui.dirty?'':' hidden')+'><div><span>Unsaved plan changes</span><button class="btn small primary" data-act="plan-save">Save</button></div></div>'+
+    '<div class="savebar" id="savebar"'+(ui.dirty?'':' hidden')+'><div><span>Unsaved changes</span><button class="btn small primary" data-act="plan-save">Save</button></div></div>'+
     '<nav class="tabs" aria-label="Sections"><div>'+Object.keys(TABS).map(function(k){
       return '<button data-tab="'+k+'"'+(ui.tab===k?' aria-current="page"':'')+'><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+TAB_ICONS[k]+'</svg>'+TABS[k]+(k==='today'&&ui.draft&&ui.tab!=='today'?'<span class="badge" aria-label="Workout in progress"></span>':'')+'</button>';
     }).join('')+'</div></nav>'+
@@ -497,7 +521,7 @@ function exCard(ex,i){
   var hint='';
   if(last && rr && last.sets.length>=(tg.sets||1) && last.sets.every(function(s){ return n(s.r)>=rr[1]; }) && last.sets.some(function(s){ return n(s.w)>0; }))
     hint='<div class="hint">Add weight: '+rr[1]+'+ reps on every set last time</div>';
-  var h='<div class="card"><div class="ex-head"><div><h3>'+esc(ex.name)+'</h3><div class="sub">'+sub+'</div>'+hint+'</div>'+
+  var h='<div class="card"><div class="ex-head"><div><h3>'+esc(ex.name)+'</h3><button class="muslink" data-act="mus-edit" data-name="'+esc(ex.name)+'">'+esc(musLine(ex.name))+'</button><div class="sub">'+sub+'</div>'+hint+'</div>'+
     '<button class="icon" data-act="rm-ex" data-ei="'+i+'" aria-label="Remove '+esc(ex.name)+'">'+(ui.confirm==='ex:'+i?'?':'×')+'</button></div>'+
     '<div class="sets"><div class="srow shead"><span>Set</span><span>lb</span><span>Reps</span><span>Done</span></div>';
   ex.sets.forEach(function(s,j){
@@ -556,6 +580,14 @@ function addPicked(nm){
 }
 function sheetHTML(){
   var h='<div class="scrim" data-act="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true">';
+  if(ui.sheet==='mus' && ui.musEdit){
+    var me=ui.musEdit, all=GROUPS.concat(['Other']);
+    return h+'<div class="between"><h2>'+esc(me.name)+'</h2><button class="btn small ghost" data-act="close-sheet">Cancel</button></div>'+
+      '<div><div class="small muted" style="margin-bottom:8px">Main muscle (full set)</div><div class="chips">'+all.map(function(g){ return '<button class="chip'+(me.p===g?' on':'')+'" data-act="mus-p" data-g="'+esc(g)+'">'+esc(g)+'</button>'; }).join('')+'</div></div>'+
+      '<div><div class="small muted" style="margin-bottom:8px">Also works ('+(credit()===1?'full set':credit()?'half set':'not counted')+')</div><div class="chips">'+GROUPS.filter(function(g){ return g!==me.p; }).map(function(g){ return '<button class="chip'+(me.s.indexOf(g)>=0?' on':'')+'" data-act="mus-s" data-g="'+esc(g)+'">'+esc(g)+'</button>'; }).join('')+'</div></div>'+
+      '<button class="btn primary" data-act="mus-save">Save muscles</button>'+
+      (state.exMuscles[me.name]?'<button class="btn ghost" data-act="mus-reset">Reset to default</button>':'')+'</div>';
+  }
   if(ui.sheet==='bw'){
     var bw=latestBW();
     h+='<div class="between"><h2>Log weigh-in</h2><button class="btn small ghost" data-act="close-sheet">Cancel</button></div>'+
@@ -580,7 +612,7 @@ function sheetHTML(){
 
 /* ---------- Plan ---------- */
 function plannedSets(){
-  var p={}; state.schedule.forEach(function(id){ var r=routine(id); if(!r) return; r.items.forEach(function(it){ var g=groupOf(it.name); p[g]=(p[g]||0)+n(it.sets); }); }); return p;
+  var p={}; state.schedule.forEach(function(id){ var r=routine(id); if(!r) return; r.items.forEach(function(it){ addCredit(p, it.name, n(it.sets)); }); }); return p;
 }
 function viewPlan(){
   var h='<section class="stack"><div class="card"><h2>Weekly schedule</h2><div class="sched">';
@@ -600,7 +632,7 @@ function viewPlan(){
     h+='<div class="rcard" id="r-'+r.id+'"><label class="f" for="rn-'+r.id+'">Routine name<input id="rn-'+r.id+'" data-pf="r-name" data-rid="'+r.id+'" value="'+esc(r.name)+'" style="background:var(--surface)"></label>'+
       '<div style="margin-top:10px"><div class="ritem h"><span>Exercise</span><span style="text-align:center">Sets</span><span style="text-align:center">Reps</span><span></span><span></span></div>';
     r.items.forEach(function(it,k){
-      h+='<div class="ritem"><span>'+esc(it.name)+'</span>'+
+      h+='<div class="ritem"><button class="mname" data-act="mus-edit" data-name="'+esc(it.name)+'">'+esc(it.name)+'<small>'+esc(musLine(it.name))+'</small></button>'+
         '<input data-pf="r-sets" data-rid="'+r.id+'" data-k="'+k+'" inputmode="numeric" value="'+esc(it.sets)+'" aria-label="'+esc(it.name)+' sets">'+
         '<input data-pf="r-reps" data-rid="'+r.id+'" data-k="'+k+'" value="'+esc(it.reps)+'" placeholder="8-12" aria-label="'+esc(it.name)+' reps">'+
         '<button class="icon" data-act="r-up" data-rid="'+r.id+'" data-k="'+k+'" aria-label="Move '+esc(it.name)+' up"'+(k===0?' disabled style="opacity:.35"':'')+'>↑</button>'+
@@ -624,10 +656,12 @@ function viewPlan(){
     '<h3 style="margin:16px 0 2px">Weekly volume per muscle</h3><p class="small muted" style="margin:0 0 6px">Planned is what your schedule adds up to.</p>'+
     '<div class="mgoal h"><span>Muscle</span><span>Planned</span><span>Sets</span><span>Reps</span></div>'+
     GROUPS.map(function(m){ var mg=g.muscles[m], pl=plannedSets()[m]||0, ok=pl>=n(mg.sets);
-      return '<div class="mgoal"><span>'+esc(m)+'</span><span class="num" style="color:'+(ok?'var(--good)':'var(--accent)')+'">'+pl+'</span>'+
+      return '<div class="mgoal"><span>'+esc(m)+'</span><span class="num" style="color:'+(ok?'var(--good)':'var(--accent)')+'">'+fmtSets(pl)+'</span>'+
         '<input data-pf="gm-sets" data-g="'+esc(m)+'" inputmode="numeric" value="'+esc(mg.sets)+'" aria-label="'+esc(m)+' sets per week">'+
         '<input data-pf="gm-reps" data-g="'+esc(m)+'" value="'+esc(mg.reps)+'" placeholder="6-10" aria-label="'+esc(m)+' rep range"></div>';
     }).join('')+
+    '<label class="f" for="g-credit" style="margin-top:12px">Helper muscles count as<select id="g-credit" data-pf="credit">'+[[0.5,'Half a set'],[1,'A full set'],[0,'Nothing (main muscle only)']].map(function(o){ return '<option value="'+o[0]+'"'+(credit()===o[0]?' selected':'')+'>'+o[1]+'</option>'; }).join('')+'</select></label>'+
+    '<p class="small muted" style="margin:6px 0 0">Bench press counts for chest, plus triceps and shoulders. Tap an exercise in a routine to change its muscles.</p>'+
     '<div class="row" style="margin-top:8px"><button class="btn small ghost" data-act="gm-apply">Use these rep ranges in my routines</button></div>'+
     '<h3 style="margin:16px 0 6px">Lift goals</h3><div class="stack" style="gap:6px">';
   var names=allNames();
@@ -717,10 +751,9 @@ function cardioWeeksChart(){
     '<text x="'+(W-R)+'" y="'+(Y(goal)-5)+'" text-anchor="end" font-size="11" font-weight="700" fill="var(--ink)">Goal '+goal+'</text></svg>';
 }
 function muscleWeek(ws){
-  var out={};
-  state.workouts.forEach(function(w){ if(weekStart(w.date)!==ws) return; w.exercises.forEach(function(e){
-    var g=e.group||groupOf(e.name), rr=repRange(state.goals.muscles[g]&&state.goals.muscles[g].reps); out[g]=out[g]||{sets:0,inRange:0};
-    e.sets.forEach(function(x){ out[g].sets++; if(rr&&n(x.r)>=rr[0]&&n(x.r)<=rr[1]) out[g].inRange++; }); }); });
+  var tot={}, out={};
+  state.workouts.forEach(function(w){ if(weekStart(w.date)!==ws) return; w.exercises.forEach(function(e){ addCredit(tot, e.name, e.sets.length); }); });
+  Object.keys(tot).forEach(function(k){ out[k]={sets:tot[k]}; });
   return out;
 }
 function viewProgress(){
@@ -759,8 +792,8 @@ function viewProgress(){
   h+='</div>';
   // sets per muscle vs weekly goal (this week, Monday on)
   var done=muscleWeek(ws), mrows=GROUPS.map(function(k){
-      var tg=n(g.muscles[k].sets), c=done[k]||{sets:0,inRange:0}, pct=tg?Math.min(100,c.sets/tg*100):0, met=tg>0&&c.sets>=tg;
-      return '<div class="mrow"><span>'+esc(k)+'<span class="small muted" style="display:block;line-height:1.1">'+esc(fmtReps(g.muscles[k].reps))+' reps</span></span><div class="mtrack"><span class="fill'+(met?' in':'')+'" style="width:'+pct+'%"></span></div><b class="num">'+c.sets+'/'+tg+'</b></div>';
+      var tg=n(g.muscles[k].sets), c=done[k]||{sets:0}, pct=tg?Math.min(100,c.sets/tg*100):0, met=tg>0&&c.sets>=tg;
+      return '<div class="mrow"><span>'+esc(k)+'<span class="small muted" style="display:block;line-height:1.1">'+esc(fmtReps(g.muscles[k].reps))+' reps</span></span><div class="mtrack"><span class="fill'+(met?' in':'')+'" style="width:'+pct+'%"></span></div><b class="num">'+fmtSets(c.sets)+'/'+tg+'</b></div>';
     }).join('');
   h+='<div class="card"><div class="between" style="margin-bottom:8px"><h2>Volume this week</h2><button class="link" data-act="go-goals">Adjust</button></div>'+mrows+'</div>';
   h+='<div class="card"><h2>Cardio minutes by week</h2>'+cardioWeeksChart()+'</div>';
@@ -809,6 +842,7 @@ function planField(el, isChange){
   else if(pf==='gm-sets'){ state.goals.muscles[el.dataset.g].sets=Math.max(0,parseInt(el.value,10)||0); }
   else if(pf==='gm-reps'){ state.goals.muscles[el.dataset.g].reps=el.value.trim(); }
   else if(pf==='rest'){ state.settings.rest=+el.value; }
+  else if(pf==='credit'){ state.settings.helperCredit=n(el.value); if(isChange){ markDirty(); render(); return true; } }
   else if(pf==='gl-name'){ state.goals.lifts[k].name=el.value; }
   else if(pf==='gl-target'){ state.goals.lifts[k].target=el.value.trim(); }
   else return false;
@@ -845,8 +879,7 @@ root.addEventListener('submit',function(e){
     var nm=v('cu-name'), g=v('cu-group'); if(!nm){ toast('Name the exercise'); return; }
     if(allNames().indexOf(nm)<0) state.custom.push({name:nm,group:g});
     if(pickTargetNames().indexOf(nm)<0) addPicked(nm);
-    var wasRoutine=ui.picker.mode==='routine'; ui.picker=null; ui.pkQ='';
-    if(wasRoutine){ markDirty(); render(); toast('Added '+nm+'. Save to keep it.'); } else persist('Added '+nm);
+    ui.picker=null; ui.pkQ=''; var mm2=musclesOf(nm); ui.musEdit={name:nm,p:mm2.p,s:mm2.s.slice()}; ui.sheet='mus'; markDirty(); render();
   }
 });
 root.addEventListener('click',function(e){
@@ -916,6 +949,14 @@ root.addEventListener('click',function(e){
     case 'gm-apply':
       state.routines.forEach(function(rt){ rt.items.forEach(function(it){ var mg=state.goals.muscles[groupOf(it.name)]; if(mg&&mg.reps) it.reps=mg.reps; }); });
       markDirty(); toast('Rep ranges copied into every routine. Tap Save to keep.'); break;
+    case 'mus-edit': var mm=musclesOf(t.dataset.name); ui.musEdit={name:t.dataset.name,p:mm.p,s:mm.s.slice()}; ui.sheet='mus'; render(); break;
+    case 'mus-p': ui.musEdit.p=t.dataset.g; ui.musEdit.s=ui.musEdit.s.filter(function(x){ return x!==t.dataset.g; }); render(); break;
+    case 'mus-s': var si=ui.musEdit.s.indexOf(t.dataset.g); if(si>=0) ui.musEdit.s.splice(si,1); else ui.musEdit.s.push(t.dataset.g); render(); break;
+    case 'mus-save':
+      state.exMuscles[ui.musEdit.name]={p:ui.musEdit.p,s:ui.musEdit.s.slice()};
+      if(ui.draft) ui.draft.exercises.forEach(function(x){ if(x.name===ui.musEdit.name) x.group=ui.musEdit.p; }), saveDraft();
+      ui.sheet=null; ui.musEdit=null; markDirty(); render(); toast('Muscles updated. Tap Save to keep.'); break;
+    case 'mus-reset': delete state.exMuscles[ui.musEdit.name]; ui.sheet=null; ui.musEdit=null; markDirty(); render(); break;
     case 'gl-rm': state.goals.lifts.splice(k,1); markDirty(); render(); break;
     case 'plan-save': ui.editR=null; persist('Plan and goals saved'); break;
     case 'hf': ui.hf=t.dataset.f; ui.confirm=null; render(); break;

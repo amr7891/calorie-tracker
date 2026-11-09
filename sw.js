@@ -1,6 +1,6 @@
 // Network-first cache so the app opens offline and always updates when online.
 // Activating this worker deletes every older cache, including the previous calorie-tracker app's.
-const CACHE = "workout-log-v2";
+const CACHE = "workout-log-v3";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icon-192-v2.png", "apple-touch-icon-v2.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => {
